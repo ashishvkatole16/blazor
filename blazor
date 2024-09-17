@@ -1,56 +1,26 @@
-using Microsoft.AspNetCore.Components.Authorization;
-using System.Security.Claims;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using System.IdentityModel.Tokens.Jwt;
-
-public class CustomAuthStateProvider : AuthenticationStateProvider
+public class LoginService
 {
+    private readonly CustomAuthStateProvider _authStateProvider;
     private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public CustomAuthStateProvider(IHttpContextAccessor httpContextAccessor)
+    public LoginService(CustomAuthStateProvider authStateProvider, IHttpContextAccessor httpContextAccessor)
     {
+        _authStateProvider = authStateProvider;
         _httpContextAccessor = httpContextAccessor;
     }
 
-    public override Task<AuthenticationState> GetAuthenticationStateAsync()
+    public async Task LoginAsync(string username, string password)
     {
-        var context = _httpContextAccessor.HttpContext;
-        var user = context?.User ?? new ClaimsPrincipal(new ClaimsIdentity());
+        // Validate user credentials and generate JWT token
+        string token = GenerateJwtToken(username, password); // Implement token generation logic
 
-        // Check if the user is authenticated
-        if (user.Identity.IsAuthenticated)
-        {
-            // Return authenticated user
-            return Task.FromResult(new AuthenticationState(user));
-        }
-
-        // Return unauthenticated user
-        return Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity())));
+        // Update authentication state
+        _authStateProvider.MarkUserAsAuthenticated(token);
     }
 
-    public void MarkUserAsAuthenticated(string token)
+    private string GenerateJwtToken(string username, string password)
     {
-        var claims = GetClaimsFromToken(token);
-        var identity = new ClaimsIdentity(claims, "jwt");
-        var user = new ClaimsPrincipal(identity);
-
-        NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(user)));
-    }
-
-    public void MarkUserAsLoggedOut()
-    {
-        var identity = new ClaimsIdentity();
-        var user = new ClaimsPrincipal(identity);
-
-        NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(user)));
-    }
-
-    private IEnumerable<Claim> GetClaimsFromToken(string token)
-    {
-        var handler = new JwtSecurityTokenHandler();
-        var jwtToken = handler.ReadToken(token) as JwtSecurityToken;
-
-        return jwtToken?.Claims ?? Enumerable.Empty<Claim>();
+        // Your logic to validate user and generate token
+        return "yourJwtToken";
     }
 }
