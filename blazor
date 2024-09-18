@@ -1,3 +1,152 @@
+public class Startup
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddRazorPages();
+        services.AddServerSideBlazor();
+
+        // Add Authentication services
+        services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+            .AddCookie(options =>
+            {
+                options.LoginPath = "/login"; // Path to the login page
+                options.AccessDeniedPath = "/forbidden"; // Path to access denied page
+            });
+
+        services.AddAuthorization();
+
+        // Add HttpContextAccessor for accessing HTTP Context in Blazor components
+        services.AddHttpContextAccessor();
+    }
+
+    public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+    {
+        if (env.IsDevelopment())
+        {
+            app.UseDeveloperExceptionPage();
+        }
+
+        app.UseStaticFiles();
+        app.UseRouting();
+
+        // Add Authentication and Authorization middleware
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        app.UseEndpoints(endpoints =>
+        {
+            endpoints.MapBlazorHub();
+            endpoints.MapFallbackToPage("/_Host");
+        });
+    }
+}
+
+
+
+
+
+@page "/login"
+@inject NavigationManager Navigation
+@inject HttpContextAccessor HttpContextAccessor
+
+<h3>Login</h3>
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<input @bind="username" placeholder="Username" />
+<input type="password" @bind="password" placeholder="Password" />
+<button @onclick="Login">Login</button>
+
+@code {
+    private string username;
+    private string password;
+    private string error;
+
+    private async Task Login()
+    {
+        if (username == "test" && password == "1234") // Example validation
+        {
+            // Generate Claims
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.Name, username),
+                new Claim(ClaimTypes.Role, "Admin") // You can assign roles dynamically
+            };
+
+            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            var principal = new ClaimsPrincipal(identity);
+
+            // Sign In
+            await HttpContextAccessor.HttpContext.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                principal,
+                new AuthenticationProperties
+                {
+                    IsPersistent = true, // Remain logged in across sessions
+                    ExpiresUtc = DateTime.UtcNow.AddMinutes(30)
+                });
+
+            Navigation.NavigateTo("/");
+        }
+        else
+        {
+            error = "Invalid username or password.";
+        }
+    }
+}
+
+
+
+
+
+@page "/admin"
+@attribute [Authorize(Roles = "Admin")]
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<h3>Admin Page</h3>
+
+<p>This page is accessible only to Admin users.</p>
+
+OR
+
+
+<AuthorizeView>
+    <Authorized>
+        <h3>Welcome, authenticated user!</h3>
+    </Authorized>
+    <NotAuthorized>
+        <h3>You are not authorized to view this page.</h3>
+    </NotAuthorized>
+</AuthorizeView>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 1. Create a Custom JwtAuthenticationStateProvider
 
 public class JwtAuthenticationStateProvider : AuthenticationStateProvider
