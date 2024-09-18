@@ -1,38 +1,84 @@
-@page "/example"
-@inject AuthenticationStateProvider AuthenticationStateProvider
-@inject NavigationManager NavigationManager
-
-@code {
-    private bool _isAuthenticated;
-    private bool _isAuthorized;
-
-    protected override async Task OnInitializedAsync()
-    {
-        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        _isAuthenticated = authState.User.Identity.IsAuthenticated;
-
-        // You can add more specific checks for roles or claims here
-        _isAuthorized = _isAuthenticated && authState.User.IsInRole("YourRole");
-    }
-
-    private void NavigateToLogin()
-    {
-        NavigationManager.NavigateTo("/login");
-    }
+@page
+@model YourNamespace.Pages.LoginModel
+@{
+    ViewData["Title"] = "Login";
 }
 
-@if (_isAuthenticated)
+<h1>Login</h1>
+
+<form method="post">
+    <div class="form-group">
+        <label for="Username">Username</label>
+        <input type="text" class="form-control" id="Username" name="Username" value="@Model.Username" />
+    </div>
+    <div class="form-group">
+        <label for="Pin">PIN</label>
+        <input type="password" class="form-control" id="Pin" name="Pin" value="@Model.Pin" />
+    </div>
+    <button type="submit" class="btn btn-primary" @onclick="OnLoginClick">Login</button>
+</form>
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
 {
-    @if (_isAuthorized)
-    {
-        <MainView />
-    }
-    else
-    {
-        <p>You do not have permission to view this page.</p>
-    }
+    <div class="alert alert-danger">
+        @Model.ErrorMessage
+    </div>
 }
-else
+
+
+
+
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Logging;
+
+namespace YourNamespace.Pages
 {
-    <button @onclick="NavigateToLogin">Login</button>
+    public class LoginModel : PageModel
+    {
+        private readonly ILogger<LoginModel> _logger;
+
+        public LoginModel(ILogger<LoginModel> logger)
+        {
+            _logger = logger;
+        }
+
+        [BindProperty]
+        public string Username { get; set; }
+
+        [BindProperty]
+        public string Pin { get; set; }
+
+        public string ErrorMessage { get; set; }
+
+        public IActionResult OnPost()
+        {
+            // Add your authentication logic here
+            if (ValidateCredentials(Username, Pin))
+            {
+                _logger.LogInformation($"User {Username} logged in successfully.");
+                // Redirect to a different page after successful login
+                return RedirectToPage("/Index");
+            }
+            else
+            {
+                ErrorMessage = "Invalid username or PIN. Please try again.";
+                return Page();
+            }
+        }
+
+        private bool ValidateCredentials(string username, string pin)
+        {
+            // Replace this with your actual username and PIN validation logic
+            // For example, checking against a database or another authentication mechanism
+            if (username == "testUser" && pin == "1234")
+            {
+                return true;
+            }
+            return false;
+        }
+    }
 }
+
+
+
