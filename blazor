@@ -1,84 +1,31 @@
-@page
-@model YourNamespace.Pages.LoginModel
-@{
-    ViewData["Title"] = "Login";
-}
+using Microsoft.AspNetCore.Http;
+using System.Threading.Tasks;
 
-<h1>Login</h1>
-
-<form method="post">
-    <div class="form-group">
-        <label for="Username">Username</label>
-        <input type="text" class="form-control" id="Username" name="Username" value="@Model.Username" />
-    </div>
-    <div class="form-group">
-        <label for="Pin">PIN</label>
-        <input type="password" class="form-control" id="Pin" name="Pin" value="@Model.Pin" />
-    </div>
-    <button type="submit" class="btn btn-primary" @onclick="OnLoginClick">Login</button>
-</form>
-
-@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+public class SessionService
 {
-    <div class="alert alert-danger">
-        @Model.ErrorMessage
-    </div>
-}
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-
-
-
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.Extensions.Logging;
-
-namespace YourNamespace.Pages
-{
-    public class LoginModel : PageModel
+    public SessionService(IHttpContextAccessor httpContextAccessor)
     {
-        private readonly ILogger<LoginModel> _logger;
+        _httpContextAccessor = httpContextAccessor;
+    }
 
-        public LoginModel(ILogger<LoginModel> logger)
+    public void SetSessionValue(string key, string value)
+    {
+        var context = _httpContextAccessor.HttpContext;
+        if (context != null)
         {
-            _logger = logger;
-        }
-
-        [BindProperty]
-        public string Username { get; set; }
-
-        [BindProperty]
-        public string Pin { get; set; }
-
-        public string ErrorMessage { get; set; }
-
-        public IActionResult OnPost()
-        {
-            // Add your authentication logic here
-            if (ValidateCredentials(Username, Pin))
-            {
-                _logger.LogInformation($"User {Username} logged in successfully.");
-                // Redirect to a different page after successful login
-                return RedirectToPage("/Index");
-            }
-            else
-            {
-                ErrorMessage = "Invalid username or PIN. Please try again.";
-                return Page();
-            }
-        }
-
-        private bool ValidateCredentials(string username, string pin)
-        {
-            // Replace this with your actual username and PIN validation logic
-            // For example, checking against a database or another authentication mechanism
-            if (username == "testUser" && pin == "1234")
-            {
-                return true;
-            }
-            return false;
+            context.Session.SetString(key, value);
         }
     }
+
+    public string GetSessionValue(string key)
+    {
+        var context = _httpContextAccessor.HttpContext;
+        if (context != null)
+        {
+            return context.Session.GetString(key);
+        }
+        return null;
+    }
 }
-
-
-
