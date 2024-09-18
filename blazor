@@ -1,349 +1,38 @@
-public class Startup
-{
-    public void ConfigureServices(IServiceCollection services)
-    {
-        services.AddRazorPages();
-        services.AddServerSideBlazor();
-
-        // Add Authentication services
-        services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-            .AddCookie(options =>
-            {
-                options.LoginPath = "/login"; // Path to the login page
-                options.AccessDeniedPath = "/forbidden"; // Path to access denied page
-            });
-
-        services.AddAuthorization();
-
-        // Add HttpContextAccessor for accessing HTTP Context in Blazor components
-        services.AddHttpContextAccessor();
-    }
-
-    public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
-    {
-        if (env.IsDevelopment())
-        {
-            app.UseDeveloperExceptionPage();
-        }
-
-        app.UseStaticFiles();
-        app.UseRouting();
-
-        // Add Authentication and Authorization middleware
-        app.UseAuthentication();
-        app.UseAuthorization();
-
-        app.UseEndpoints(endpoints =>
-        {
-            endpoints.MapBlazorHub();
-            endpoints.MapFallbackToPage("/_Host");
-        });
-    }
-}
-
-
-
-
-
-@page "/login"
-@inject NavigationManager Navigation
-@inject HttpContextAccessor HttpContextAccessor
-
-<h3>Login</h3>
-
-@if (!string.IsNullOrEmpty(error))
-{
-    <div class="alert alert-danger">@error</div>
-}
-
-<input @bind="username" placeholder="Username" />
-<input type="password" @bind="password" placeholder="Password" />
-<button @onclick="Login">Login</button>
-
-@code {
-    private string username;
-    private string password;
-    private string error;
-
-    private async Task Login()
-    {
-        if (username == "test" && password == "1234") // Example validation
-        {
-            // Generate Claims
-            var claims = new List<Claim>
-            {
-                new Claim(ClaimTypes.Name, username),
-                new Claim(ClaimTypes.Role, "Admin") // You can assign roles dynamically
-            };
-
-            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-            var principal = new ClaimsPrincipal(identity);
-
-            // Sign In
-            await HttpContextAccessor.HttpContext.SignInAsync(
-                CookieAuthenticationDefaults.AuthenticationScheme,
-                principal,
-                new AuthenticationProperties
-                {
-                    IsPersistent = true, // Remain logged in across sessions
-                    ExpiresUtc = DateTime.UtcNow.AddMinutes(30)
-                });
-
-            Navigation.NavigateTo("/");
-        }
-        else
-        {
-            error = "Invalid username or password.";
-        }
-    }
-}
-
-
-
-
-
-@page "/admin"
-@attribute [Authorize(Roles = "Admin")]
+@page "/example"
 @inject AuthenticationStateProvider AuthenticationStateProvider
-
-<h3>Admin Page</h3>
-
-<p>This page is accessible only to Admin users.</p>
-
-OR
-
-
-<AuthorizeView>
-    <Authorized>
-        <h3>Welcome, authenticated user!</h3>
-    </Authorized>
-    <NotAuthorized>
-        <h3>You are not authorized to view this page.</h3>
-    </NotAuthorized>
-</AuthorizeView>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-1. Create a Custom JwtAuthenticationStateProvider
-
-public class JwtAuthenticationStateProvider : AuthenticationStateProvider
-{
-    private readonly IHttpContextAccessor _httpContextAccessor;
-    private readonly ITokenService _tokenService;
-
-    public JwtAuthenticationStateProvider(IHttpContextAccessor httpContextAccessor, ITokenService tokenService)
-    {
-        _httpContextAccessor = httpContextAccessor;
-        _tokenService = tokenService;
-    }
-
-    public override Task<AuthenticationState> GetAuthenticationStateAsync()
-    {
-        var token = _tokenService.GetTokenFromCookie(); // Method to get token from cookie
-
-        if (string.IsNullOrEmpty(token))
-        {
-            var anonymous = new ClaimsIdentity();
-            return Task.FromResult(new AuthenticationState(new ClaimsPrincipal(anonymous)));
-        }
-
-        var claims = _tokenService.GetClaimsFromToken(token);
-
-        if (claims == null)
-        {
-            var anonymous = new ClaimsIdentity();
-            return Task.FromResult(new AuthenticationState(new ClaimsPrincipal(anonymous)));
-        }
-
-        var identity = new ClaimsIdentity(claims, "jwtAuthType");
-        var user = new ClaimsPrincipal(identity);
-
-        return Task.FromResult(new AuthenticationState(user));
-    }
-
-    public void MarkUserAsAuthenticated(string token)
-    {
-        var claims = _tokenService.GetClaimsFromToken(token);
-        var identity = new ClaimsIdentity(claims, "jwtAuthType");
-        var user = new ClaimsPrincipal(identity);
-
-        NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(user)));
-    }
-
-    public void MarkUserAsLoggedOut()
-    {
-        var anonymous = new ClaimsIdentity();
-        NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(new ClaimsPrincipal(anonymous))));
-    }
-}
-
-
-
-
-2. Implement the ITokenService to Handle JWT Token Operations
-
-public interface ITokenService
-{
-    string GetTokenFromCookie();
-    IEnumerable<Claim> GetClaimsFromToken(string token);
-}
-
-public class TokenService : ITokenService
-{
-    private readonly IHttpContextAccessor _httpContextAccessor;
-    private readonly string _jwtSecretKey;
-
-    public TokenService(IHttpContextAccessor httpContextAccessor, IConfiguration configuration)
-    {
-        _httpContextAccessor = httpContextAccessor;
-        _jwtSecretKey = configuration["JwtSettings:SecretKey"];
-    }
-
-    public string GetTokenFromCookie()
-    {
-        return _httpContextAccessor.HttpContext?.Request.Cookies["jwtToken"];
-    }
-
-    public IEnumerable<Claim> GetClaimsFromToken(string token)
-    {
-        var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.ASCII.GetBytes(_jwtSecretKey);
-
-        try
-        {
-            var principal = tokenHandler.ValidateToken(token, new TokenValidationParameters
-            {
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(key),
-                ValidateIssuer = false,
-                ValidateAudience = false,
-                ClockSkew = TimeSpan.Zero
-            }, out SecurityToken validatedToken);
-
-            return principal.Claims;
-        }
-        catch
-        {
-            // Token validation failed
-            return null;
-        }
-    }
-}
-
-
-3. Inject the JwtAuthenticationStateProvider in Startup.cs
-
-public void ConfigureServices(IServiceCollection services)
-{
-    services.AddHttpContextAccessor();
-    services.AddScoped<ITokenService, TokenService>();
-    services.AddScoped<AuthenticationStateProvider, JwtAuthenticationStateProvider>();
-
-    services.AddAuthenticationCore(); // Blazor Server-side authentication
-    services.AddAuthorizationCore(); // Blazor authorization support
-}
-
-
-
-4. Set the Authentication State in AuthenticationService
-
-public class AuthenticationService
-{
-    private readonly ITokenService _tokenService;
-    private readonly JwtAuthenticationStateProvider _authenticationStateProvider;
-    private readonly IHttpContextAccessor _httpContextAccessor;
-
-    public AuthenticationService(ITokenService tokenService, JwtAuthenticationStateProvider authenticationStateProvider, IHttpContextAccessor httpContextAccessor)
-    {
-        _tokenService = tokenService;
-        _authenticationStateProvider = authenticationStateProvider;
-        _httpContextAccessor = httpContextAccessor;
-    }
-
-    public void AuthenticateUser(string username, string pinCode)
-    {
-        // Validate user credentials (this could be through a database)
-
-        // Generate JWT token after validation
-        var token = GenerateJwtToken();
-
-        // Set token as cookie
-        _httpContextAccessor.HttpContext.Response.Cookies.Append("jwtToken", token, new CookieOptions { HttpOnly = true });
-
-        // Notify AuthenticationStateProvider that user is authenticated
-        _authenticationStateProvider.MarkUserAsAuthenticated(token);
-    }
-
-    public void LogoutUser()
-    {
-        // Remove the token from cookies
-        _httpContextAccessor.HttpContext.Response.Cookies.Delete("jwtToken");
-
-        // Notify AuthenticationStateProvider that user is logged out
-        _authenticationStateProvider.MarkUserAsLoggedOut();
-    }
-
-    private string GenerateJwtToken()
-    {
-        // JWT generation logic here
-        return "generated-jwt-token";
-    }
-}
-
-
-
-5. Use <Authorized> Tag in Razor Page
-<AuthorizeView>
-    <Authorized>
-        <h3>Welcome, authenticated user!</h3>
-    </Authorized>
-    <NotAuthorized>
-        <h3>You are not authorized to view this content.</h3>
-    </NotAuthorized>
-</AuthorizeView>
-
-
-
-6. Login and Logout Buttons
-<button @onclick="Login">Login</button>
-<button @onclick="Logout">Logout</button>
+@inject NavigationManager NavigationManager
 
 @code {
-    [Inject] private AuthenticationService AuthService { get; set; }
+    private bool _isAuthenticated;
+    private bool _isAuthorized;
 
-    private void Login()
+    protected override async Task OnInitializedAsync()
     {
-        AuthService.AuthenticateUser("username", "pincode");
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _isAuthenticated = authState.User.Identity.IsAuthenticated;
+
+        // You can add more specific checks for roles or claims here
+        _isAuthorized = _isAuthenticated && authState.User.IsInRole("YourRole");
     }
 
-    private void Logout()
+    private void NavigateToLogin()
     {
-        AuthService.LogoutUser();
+        NavigationManager.NavigateTo("/login");
     }
 }
 
-
-
+@if (_isAuthenticated)
+{
+    @if (_isAuthorized)
+    {
+        <MainView />
+    }
+    else
+    {
+        <p>You do not have permission to view this page.</p>
+    }
+}
+else
+{
+    <button @onclick="NavigateToLogin">Login</button>
+}
