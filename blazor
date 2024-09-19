@@ -1,31 +1,29 @@
-using Microsoft.AspNetCore.Http;
-using System.Threading.Tasks;
+using System;
+using System.Security.Cryptography;
+using System.Text;
 
-public class SessionService
+public class SimpleEncryption
 {
-    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly string key = "your-32-byte-secret-key"; // 32 bytes for AES-256
 
-    public SessionService(IHttpContextAccessor httpContextAccessor)
+    public string EncryptPin(string pin)
     {
-        _httpContextAccessor = httpContextAccessor;
-    }
-
-    public void SetSessionValue(string key, string value)
-    {
-        var context = _httpContextAccessor.HttpContext;
-        if (context != null)
+        using (Aes aes = Aes.Create())
         {
-            context.Session.SetString(key, value);
-        }
-    }
+            aes.Key = Encoding.UTF8.GetBytes(key);
+            aes.GenerateIV(); // Random IV
+            var iv = aes.IV;
 
-    public string GetSessionValue(string key)
-    {
-        var context = _httpContextAccessor.HttpContext;
-        if (context != null)
-        {
-            return context.Session.GetString(key);
+            using (var encryptor = aes.CreateEncryptor(aes.Key, aes.IV))
+            {
+                byte[] encrypted = encryptor.TransformFinalBlock(Encoding.UTF8.GetBytes(pin), 0, pin.Length);
+                // Combine IV and encrypted data
+                byte[] combined = new byte[iv.Length + encrypted.Length];
+                Array.Copy(iv, 0, combined, 0, iv.Length);
+                Array.Copy(encrypted, 0, combined, iv.Length, encrypted.Length);
+
+                return Convert.ToBase64String(combined); // Return the result as Base64
+            }
         }
-        return null;
     }
 }
